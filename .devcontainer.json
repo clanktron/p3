@@ -1,0 +1,19 @@
+{
+  "name": "TinyRV DevContainer",
+  "build": {
+    "dockerfile": "Devcontainer.containerfile"
+  },
+  "settings": {
+    "terminal.integrated.shell.linux": "/usr/bin/fish"
+  },
+  "extensions": [
+    "ms-vscode.cpptools",
+    "ms-vscode.cmake-tools",
+    "twxs.cmake"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace"
+}
