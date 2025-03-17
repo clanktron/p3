@@ -48,7 +48,7 @@ public:
 
   bool operands_ready(uint32_t index) const {
     // are all operands ready?
-    // TODO:
+    return store_.at(index).operands_ready();
   }
 
   const entry_t& get_entry(uint32_t index) const {
