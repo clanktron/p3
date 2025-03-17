@@ -32,7 +32,9 @@ void Core::issue() {
   auto exe_flags = instr->getExeFlags();
 
   // check for structial hazards
-  // TODO:
+  if (RS_.full() || ROB_.full()) {
+    return;
+  }
 
   uint32_t rs1_data = 0;  // rs1 data obtained from register file or ROB
   uint32_t rs2_data = 0;  // rs2 data obtained from register file or ROB
@@ -43,32 +45,48 @@ void Core::issue() {
   auto rs2 = instr->getRs2();
 
   // get rs1 data
-  // check the RAT if value is in the registe file
-  // if not in the register file, check data is in the ROB
-  // else set rs1_rsid to the reservation station id producing the data
-  // remember to first check if the instruction actually uses rs1
-  // HINT: should use RAT, ROB, RST, and reg_file_
-  // TODO:
+  if (exe_flags.use_rs1) {
+    if (RAT_.exists(rs1)) {
+      int rob_index = RAT_.get(rs1);
+      if (ROB_.get_entry(rob_index).ready) {
+        rs1_data = ROB_.get_entry(rob_index).result;
+      } else {
+        rs1_rsid = RST_[rob_index];
+      }
+    } else {
+      rs1_data = reg_file_.at(rs1);
+    }
+  }
 
   // get rs2 data
-  // check the RAT if value is in the registe file
-  // if not in the register file, check data is in the ROB
-  // else set rs1_rsid to the reservation station id producing the data
-  // remember to first check if the instruction actually uses rs2
-  // HINT: should use RAT, ROB, RST, and reg_file_
-  // TODO:
+  if (exe_flags.use_rs2) {
+    if (RAT_.exists(rs2)) {
+      int rob_index = RAT_.get(rs2);
+      if (ROB_.get_entry(rob_index).ready) {
+        rs2_data = ROB_.get_entry(rob_index).result;
+      } else {
+        rs2_rsid = RST_[rob_index];
+      }
+    } else {
+      rs2_data = reg_file_.at(rs2);
+    }
+  }
 
   // allocat new ROB entry and obtain its index
-  // TODO:
+  int rob_index = ROB_.allocate(instr);
 
   // update the RAT mapping if this instruction write to the register file
-  // TODO:
+  if (exe_flags.use_rd) {
+    RAT_.set(instr->getRd(), rob_index);
+  }
 
   // issue the instruction to free reservation station
-  // TODO:
+  int rs_index = RS_.issue(rob_index, rs1_rsid, rs2_rsid, rs1_data, rs2_data, instr);
 
   // update RST mapping
-  // TODO:
+  if (exe_flags.use_rd) {
+    RST_[rob_index] = rs_index;
+  }
 
   DT(2, "Issue: " << *instr);
 
@@ -88,7 +106,12 @@ void Core::execute() {
   // The CDB can only serve one functional unit per cycle
   // HINT: should use CDB_ and FUs_
   for (auto fu : FUs_) {
-    // TODO:
+    if (fu->done() && CDB_.empty()) {
+      auto output = fu->get_output();
+      CDB_.push(output.result, output.rob_index, output.rs_index);
+      fu->clear();
+      break;  // Only one FU can use CDB per cycle
+    }
   }
 
   // schedule ready instructions to corresponding functional units
@@ -98,7 +121,15 @@ void Core::execute() {
   // HINT: should use RS_ and FUs_
   for (int rs_index = 0; rs_index < (int)RS_.size(); ++rs_index) {
     auto& entry = RS_.get_entry(rs_index);
-    // TODO:
+    if (entry.valid && !entry.running && RS_.operands_ready(rs_index) && !RS_.locked(rs_index)) {
+      auto fu_type = entry.instr->getFUType();
+      auto& fu = FUs_.at((int)fu_type);
+      if (!fu->busy()) {
+        fu->issue(entry.instr, entry.rob_index, rs_index, entry.rs1_data, entry.rs2_data);
+        entry.running = true;
+        break;  // Only schedule one instruction per cycle
+      }
+    }
   }
 }
 
@@ -112,18 +143,21 @@ void Core::writeback() {
   // update all reservation stations waiting for operands
   // HINT: use RS::entry_t::update_operands()
   for (int rs_index = 0; rs_index < (int)RS_.size(); ++rs_index) {
-    // TODO:
+    auto& entry = RS_.get_entry(rs_index);
+    if (entry.valid) {
+      entry.update_operands(cdb_data);
+    }
   }
 
   // free the RS entry associated with this CDB response
   // so that it can be used by other instructions
-  // TODO:
+  RS_.release(cdb_data.rs_index);
 
   // update ROB
-  // TODO:
+  ROB_.update(cdb_data);
 
   // clear CDB
-  // TODO:
+  CDB_.pop();
 
   RS_.dump();
 }
@@ -144,10 +178,15 @@ void Core::commit() {
     // If this instruction writes to the register file,
     // (1) update the register file
     // (2) clear the RAT if still pointing to this ROB head
-    // TODO:
+    if (exe_flags.use_rd) {
+      reg_file_.at(instr->getRd()) = rob_head.result;
+      if (RAT_.exists(instr->getRd()) && RAT_.get(instr->getRd()) == head_index) {
+        RAT_.clear(instr->getRd());
+      }
+    }
 
     // pop ROB entry
-    // TODO:
+    ROB_.pop();
 
     DT(2, "Commit: " << *instr);
 
