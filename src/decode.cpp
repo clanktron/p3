@@ -529,7 +529,15 @@ Instr::Ptr Core::decode(uint32_t instr_code, uint32_t PC, uint64_t uuid) const {
   // assign fu_type based on the instruction type
   // We will executre CSR instructions on the Special Function Unit (SFU).
   // HINT: use the exe_flags as well
-  // TODO:
+  if (exe_flags.is_csr) {
+    fu_type = FUType::SFU;
+  } else if (exe_flags.is_load || exe_flags.is_store) {
+    fu_type = FUType::LSU;
+  } else if (br_op != BrOp::NONE) {
+    fu_type = FUType::BRU;
+  } else {
+    fu_type = FUType::ALU;
+  }
 
   instr->setOpcode(opcode);
   instr->setRd(rd);
