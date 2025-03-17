@@ -38,7 +38,14 @@ public:
 
     void update_operands(const CommonDataBus::data_t& data) {
       // update operands if this RS entry is waiting for them
-      // TODO:
+      if (rs1_index == data.rs_index) {
+        rs1_data = data.result;
+        rs1_index = -1;
+      }
+      if (rs2_index == data.rs_index) {
+        rs2_data = data.result;
+        rs2_index = -1;
+      }
     }
   };
 
